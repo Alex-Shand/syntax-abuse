@@ -84,6 +84,7 @@ macro_rules! tests {
 }
 
 /// do while loop
+#[macro_export]
 macro_rules! do_while {
     (do $body: block while $e: expr) => {
         $body
