@@ -83,6 +83,14 @@ macro_rules! tests {
     ($($tests:tt)*) => { ::syntax_abuse::tests!{tests: $($tests)* } }
 }
 
+/// do while loop
+macro_rules! do_while {
+    (do $body: block while $e: expr) => {
+        $body
+        while $e $body
+    }
+}
+
 /// Lazy static wrapper for test data
 #[macro_export]
 macro_rules! testdata {
