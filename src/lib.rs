@@ -95,6 +95,14 @@ macro_rules! do_while {
 /// Lazy static wrapper for test data
 #[macro_export]
 macro_rules! testdata {
+    /// For types that can't be named
+    ($($name:ident : ??? = $expr:expr;)+) => {
+        $(
+            macro_rules! $name {
+                () => { $expr }
+            }
+        )+
+    };
     ($($name:ident : $ty:ty = $expr:expr;)+) => {
         $crate::lazy_static! {
             $(static ref $name: $ty = $expr;)+
