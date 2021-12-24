@@ -113,6 +113,22 @@ macro_rules! testdata {
 /// Test method boilerplate
 #[macro_export]
 macro_rules! testcase {
+    ($name:ident, $test:expr, panic!(*)) => {
+        #[test]
+        #[should_panic]
+        #[allow(clippy::drop_copy)]
+        fn $name() {
+            drop($test)
+        }
+    };
+    ($name:ident, $test:expr, panic!($msg:literal)) => {
+        #[test]
+        #[should_panic(expected = $msg)]
+        #[allow(clippy::drop_copy)]
+        fn $name() {
+            drop($test)
+        }
+    };
     ($name:ident, $test:expr, $expected:expr) => {
         #[test]
         fn $name() {
