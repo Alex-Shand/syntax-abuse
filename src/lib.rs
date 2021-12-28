@@ -14,7 +14,8 @@
 #![deny(clippy::pedantic)]
 
 pub use lazy_static::lazy_static;
-pub use pretty_assertions::{assert_eq, assert_ne};
+pub use pretty_assertions;
+pub use proptest;
 
 /// Generate a `From` or `TryFrom` impl
 #[macro_export]
@@ -45,9 +46,9 @@ macro_rules! conversion {
 /// Force evaluation of an expr fragment
 #[macro_export]
 macro_rules! eval {
-    ($i:ident = $e:expr => $($context:tt)+) => {
+    ($pat:pat = $e:expr => $($context:tt)+) => {
         match $e {
-            $i => $($context)+
+            $pat => $($context)+
         }
     }
 }
@@ -75,7 +76,7 @@ macro_rules! tests {
     ($name:ident : $($tests:tt)*) => {
         #[cfg(test)]
         mod $name {
-            use $crate::{ tests, testcase, testdata, assert_eq, assert_ne };
+            use $crate::{ tests, testcase, testdata };
             use super::*;
             $($tests)*
         }
@@ -110,37 +111,73 @@ macro_rules! testdata {
     }
 }
 
+#[doc(hidden)]
+#[macro_export]
+macro_rules! body {
+    ([$($eq:tt)+],
+     [
+         $(let $pat:pat = $expr:expr;)*
+             ($test:expr) should be $(equal to)? ($expected:expr) $(;)?
+     ]
+    ) => {
+        $(let $pat = $expr;)*
+        $crate::eval! {
+            (test, expected) = ($test, $expected) =>
+                $($eq)+!(test, expected)
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! should_panic {
+    () => { #[should_panic] };
+    ($msg:literal) => { #[should_panic(expected = $msg)] };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! drop {
+    ($test:expr, $ignored:expr) => {
+        ::std::mem::drop($test)
+    }
+}
+
 /// Test method boilerplate
 #[macro_export]
 macro_rules! testcase {
-    ($name:ident, $test:expr, panic!(*)) => {
+    ($name:ident($($arg:ident in $range:path),* $(,)?) $(require ($require:expr))? {
+        $($tt:tt)+
+    }) => {
+        #[test]
+        fn $name() {
+            use $crate::proptest;
+            $crate::proptest::proptest!(|($($arg in $range),*)| {
+                $($crate::proptest::prop_assume!($require);)?
+                $crate::body!([$crate::proptest::prop_assert_eq], [$($tt)+])
+            });
+        }
+    };
+    ($name:ident panics { $($tt:tt)+ }) => {
         #[test]
         #[should_panic]
         #[allow(clippy::drop_copy)]
         fn $name() {
-            drop($test)
+            $crate::body!([$crate::drop], [($($tt)+) should be (true)])
         }
     };
-    ($name:ident, $test:expr, panic!($msg:literal)) => {
+    ($name:ident panics with $msg:literal{ $($tt:tt)+ }) => {
         #[test]
         #[should_panic(expected = $msg)]
         #[allow(clippy::drop_copy)]
         fn $name() {
-            drop($test)
+            $crate::body!([$crate::drop], [($($tt)+) should be (true)])
         }
     };
-    ($name:ident, $test:expr, $expected:expr) => {
+    ($name:ident { $($tt:tt)+ }) => {
         #[test]
         fn $name() {
-            match ($test, $expected) {
-                (test, expected) => assert_eq!(
-                    test,
-                    expected,
-                    "{} != {}",
-                    stringify!($test),
-                    stringify!($expected)
-                ),
-            }
+            $crate::body!([$crate::pretty_assertions::assert_eq], [$($tt)+]);
         }
     };
 }
